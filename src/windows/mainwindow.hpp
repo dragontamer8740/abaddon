@@ -39,6 +39,9 @@ public:
 
 private:
     void SetupMenu();
+    void SetupDND();
+
+    void HandleDroppedURIs(const Gtk::SelectionData &selection);
 
     Gtk::Box m_main_box;
     Gtk::Box m_content_box;
@@ -80,6 +83,7 @@ private:
     Gtk::MenuItem m_menu_view_go_back;
     Gtk::MenuItem m_menu_view_go_forward;
 #endif
+
     void OnViewSubmenuPopup();
 
 public:
