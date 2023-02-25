@@ -1,6 +1,4 @@
-#include "abaddon.hpp"
 #include "discord.hpp"
-#include "util.hpp"
 #include <cinttypes>
 #include <utility>
 
@@ -341,12 +339,10 @@ bool DiscordClient::HasChannelPermission(Snowflake user_id, Snowflake channel_id
 }
 
 Permission DiscordClient::ComputePermissions(Snowflake member_id, Snowflake guild_id) const {
-    const auto member = GetMember(member_id, guild_id);
-    const auto guild = GetGuild(guild_id);
-    if (!member.has_value() || !guild.has_value())
-        return Permission::NONE;
+    const auto member_roles = m_store.GetMemberRoles(guild_id, member_id);
+    const auto guild_owner = m_store.GetGuildOwner(guild_id);
 
-    if (guild->OwnerID == member_id)
+    if (guild_owner == member_id)
         return Permission::ALL;
 
     const auto everyone = GetRole(guild_id);
@@ -354,7 +350,7 @@ Permission DiscordClient::ComputePermissions(Snowflake member_id, Snowflake guil
         return Permission::NONE;
 
     Permission perms = everyone->Permissions;
-    for (const auto role_id : member->Roles) {
+    for (const auto role_id : member_roles) {
         const auto role = GetRole(role_id);
         if (role.has_value())
             perms |= role->Permissions;
@@ -371,8 +367,8 @@ Permission DiscordClient::ComputeOverwrites(Permission base, Snowflake member_id
         return Permission::ALL;
 
     const auto channel = GetChannel(channel_id);
-    const auto member = GetMember(member_id, *channel->GuildID);
-    if (!member.has_value() || !channel.has_value())
+    const auto member_roles = m_store.GetMemberRoles(*channel->GuildID, member_id);
+    if (!channel.has_value())
         return Permission::NONE;
 
     Permission perms = base;
@@ -384,7 +380,7 @@ Permission DiscordClient::ComputeOverwrites(Permission base, Snowflake member_id
 
     Permission allow = Permission::NONE;
     Permission deny = Permission::NONE;
-    for (const auto role_id : member->Roles) {
+    for (const auto role_id : member_roles) {
         const auto overwrite = GetPermissionOverwrite(channel_id, role_id);
         if (overwrite.has_value()) {
             allow |= overwrite->Allow;
@@ -571,10 +567,6 @@ void DiscordClient::SendThreadLazyLoad(Snowflake id) {
     msg.ThreadIDs.emplace().push_back(id);
 
     m_websocket.Send(msg);
-}
-
-void DiscordClient::JoinGuild(const std::string &code) {
-    m_http.MakePOST("/invites/" + code, "{}", [](auto) {});
 }
 
 void DiscordClient::LeaveGuild(Snowflake id) {
@@ -1208,6 +1200,10 @@ void DiscordClient::SetUserAgent(const std::string &agent) {
     m_websocket.SetUserAgent(agent);
 }
 
+void DiscordClient::SetDumpReady(bool dump) {
+    m_dump_ready = dump;
+}
+
 bool DiscordClient::IsChannelMuted(Snowflake id) const noexcept {
     return m_muted_channels.find(id) != m_muted_channels.end();
 }
@@ -1570,6 +1566,17 @@ void DiscordClient::ProcessNewGuild(GuildData &guild) {
 
 void DiscordClient::HandleGatewayReady(const GatewayMessage &msg) {
     m_ready_received = true;
+
+    if (m_dump_ready) {
+        const auto name = "./payload_ready-" + Glib::DateTime::create_now_utc().format("%Y-%m-%d_%H-%M-%S") + ".json";
+        auto *fp = std::fopen(name.c_str(), "wb");
+        if (fp != nullptr) {
+            const auto contents = msg.Data.dump(4);
+            std::fwrite(contents.data(), contents.size(), 1, fp);
+            std::fclose(fp);
+        }
+    }
+
     ReadyEventData data = msg.Data;
     for (auto &g : data.Guilds)
         ProcessNewGuild(g);
@@ -2279,6 +2286,10 @@ std::set<Snowflake> DiscordClient::GetPrivateChannels() const {
     if (const auto iter = m_guild_to_channels.find(Snowflake::Invalid); iter != m_guild_to_channels.end())
         return iter->second;
     return {};
+}
+
+const UserSettings &DiscordClient::GetUserSettings() const {
+    return m_user_settings;
 }
 
 EPremiumType DiscordClient::GetSelfPremiumType() const {
