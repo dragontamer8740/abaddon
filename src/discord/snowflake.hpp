@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <glibmm/ustring.h>
+#include <spdlog/fmt/fmt.h>
+#include <spdlog/fmt/ostr.h>
 
 struct Snowflake {
     Snowflake();
@@ -14,6 +16,7 @@ struct Snowflake {
 
     [[nodiscard]] bool IsValid() const;
     [[nodiscard]] Glib::ustring GetLocalTimestamp() const;
+    [[nodiscard]] uint64_t GetUnixMilliseconds() const noexcept;
 
     bool operator==(const Snowflake &s) const noexcept {
         return m_num == s.m_num;
@@ -37,6 +40,13 @@ private:
     friend struct std::hash<Snowflake>;
     friend struct std::less<Snowflake>;
     unsigned long long m_num;
+};
+
+template<>
+struct fmt::formatter<Snowflake> : fmt::formatter<std::string> {
+    auto format(Snowflake id, format_context &ctx) -> decltype(ctx.out()) {
+        return format_to(ctx.out(), "[id: {}]", static_cast<uint64_t>(id));
+    }
 };
 
 namespace std {

@@ -3,6 +3,11 @@
 #include "components/chatwindow.hpp"
 #include "components/memberlist.hpp"
 #include "components/friendslist.hpp"
+#include "components/voiceinfobox.hpp"
+#include <gtkmm/window.h>
+#include <gtkmm/stack.h>
+#include <gtkmm/menubar.h>
+#include <gtkmm/checkmenuitem.h>
 
 class MainWindow : public Gtk::Window {
 public:
@@ -24,6 +29,7 @@ public:
     void UpdateChatReactionRemove(Snowflake id, const Glib::ustring &param);
     void UpdateMenus();
     void ToggleMenuVisibility();
+    void EditMessage(Snowflake message_id);
 
 #ifdef WITH_LIBHANDY
     void GoBack();
@@ -53,6 +59,12 @@ private:
     MemberList m_members;
     FriendsList m_friends;
 
+#ifdef WITH_VOICE
+    VoiceInfoBox m_voice_info;
+#endif
+
+    Gtk::Box m_left_pane;
+
     Gtk::Stack m_content_stack;
 
     Glib::RefPtr<Gtk::AccelGroup> m_accels;
@@ -63,6 +75,7 @@ private:
     Gtk::MenuItem m_menu_discord_connect;
     Gtk::MenuItem m_menu_discord_disconnect;
     Gtk::MenuItem m_menu_discord_set_token;
+    Gtk::MenuItem m_menu_discord_login_qr;
     Gtk::MenuItem m_menu_discord_set_status;
     Gtk::MenuItem m_menu_discord_add_recipient; // move me somewhere else some day
     void OnDiscordSubmenuPopup();
@@ -92,6 +105,7 @@ public:
     typedef sigc::signal<void> type_signal_action_connect;
     typedef sigc::signal<void> type_signal_action_disconnect;
     typedef sigc::signal<void> type_signal_action_set_token;
+    typedef sigc::signal<void> type_signal_action_login_qr;
     typedef sigc::signal<void> type_signal_action_reload_css;
     typedef sigc::signal<void> type_signal_action_set_status;
     // this should probably be removed
@@ -102,6 +116,7 @@ public:
     type_signal_action_connect signal_action_connect();
     type_signal_action_disconnect signal_action_disconnect();
     type_signal_action_set_token signal_action_set_token();
+    type_signal_action_login_qr signal_action_login_qr();
     type_signal_action_reload_css signal_action_reload_css();
     type_signal_action_set_status signal_action_set_status();
     type_signal_action_add_recipient signal_action_add_recipient();
@@ -112,6 +127,7 @@ private:
     type_signal_action_connect m_signal_action_connect;
     type_signal_action_disconnect m_signal_action_disconnect;
     type_signal_action_set_token m_signal_action_set_token;
+    type_signal_action_login_qr m_signal_action_login_qr;
     type_signal_action_reload_css m_signal_action_reload_css;
     type_signal_action_set_status m_signal_action_set_status;
     type_signal_action_add_recipient m_signal_action_add_recipient;

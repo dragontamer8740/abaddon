@@ -45,6 +45,17 @@ public:
         std::string MentionBadgeColor { "#b82525" };
         std::string MentionBadgeTextColor { "#fbfbfb" };
         std::string UnreadIndicatorColor { "#ffffff" };
+
+        // [notifications]
+#ifdef _WIN32
+        bool NotificationsEnabled { false };
+#else
+        bool NotificationsEnabled { true };
+#endif
+        bool NotificationsPlaySound { true };
+
+        // [windows]
+        bool HideConsole { false };
     };
 
     SettingsManager(const std::string &filename);

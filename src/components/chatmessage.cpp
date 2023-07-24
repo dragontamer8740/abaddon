@@ -1,13 +1,8 @@
 #include "chatmessage.hpp"
+#include "constants.hpp"
 #include "lazyimage.hpp"
+#include "misc/chatutil.hpp"
 #include <unordered_map>
-
-constexpr static int EmojiSize = 24; // settings eventually
-constexpr static int AvatarSize = 32;
-constexpr static int EmbedImageWidth = 400;
-constexpr static int EmbedImageHeight = 300;
-constexpr static int ThumbnailSize = 100;
-constexpr static int StickerComponentSize = 160;
 
 ChatMessageItemContainer::ChatMessageItemContainer()
     : m_main(Gtk::ORIENTATION_VERTICAL) {
@@ -190,11 +185,11 @@ void ChatMessageItemContainer::UpdateTextComponent(Gtk::TextView *tv) {
         case MessageType::DEFAULT:
         case MessageType::INLINE_REPLY:
             b->insert(s, data->Content);
-            HandleRoleMentions(b);
-            HandleUserMentions(b);
+            ChatUtil::HandleRoleMentions(b);
+            ChatUtil::HandleUserMentions(b, ChannelID, false);
             HandleLinks(*tv);
             HandleChannelMentions(tv);
-            HandleEmojis(*tv);
+            ChatUtil::HandleEmojis(*tv);
             break;
         case MessageType::USER_PREMIUM_GUILD_SUBSCRIPTION:
             b->insert_markup(s, "<span color='#999999'><i>[boosted server]</i></span>");
@@ -216,46 +211,46 @@ void ChatMessageItemContainer::UpdateTextComponent(Gtk::TextView *tv) {
                 }
             } else {
                 b->insert(s, data->Content);
-                HandleUserMentions(b);
+                ChatUtil::HandleUserMentions(b, ChannelID, false);
                 HandleLinks(*tv);
                 HandleChannelMentions(tv);
-                HandleEmojis(*tv);
+                ChatUtil::HandleEmojis(*tv);
             }
         } break;
         case MessageType::RECIPIENT_ADD: {
             if (data->Mentions.empty()) break;
             const auto &adder = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
             const auto &added = data->Mentions[0];
-            b->insert_markup(s, "<i><span color='#999999'><span color='#eeeeee'>" + adder->Username + "</span> added <span color='#eeeeee'>" + added.Username + "</span></span></i>");
+            b->insert_markup(s, "<i><span color='#999999'><span color='#eeeeee'>" + adder->GetUsername() + "</span> added <span color='#eeeeee'>" + added.GetUsername() + "</span></span></i>");
         } break;
         case MessageType::RECIPIENT_REMOVE: {
             if (data->Mentions.empty()) break;
             const auto &adder = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
             const auto &added = data->Mentions[0];
             if (adder->ID == added.ID)
-                b->insert_markup(s, "<i><span color='#999999'><span color='#eeeeee'>" + adder->Username + "</span> left</span></i>");
+                b->insert_markup(s, "<i><span color='#999999'><span color='#eeeeee'>" + adder->GetUsername() + "</span> left</span></i>");
             else
-                b->insert_markup(s, "<i><span color='#999999'><span color='#eeeeee'>" + adder->Username + "</span> removed <span color='#eeeeee'>" + added.Username + "</span></span></i>");
+                b->insert_markup(s, "<i><span color='#999999'><span color='#eeeeee'>" + adder->GetUsername() + "</span> removed <span color='#eeeeee'>" + added.GetUsername() + "</span></span></i>");
         } break;
         case MessageType::CHANNEL_NAME_CHANGE: {
             const auto author = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
-            b->insert_markup(s, "<i><span color='#999999'>" + author->GetEscapedBoldName() + " changed the name to <b>" + Glib::Markup::escape_text(data->Content) + "</b></span></i>");
+            b->insert_markup(s, "<i><span color='#999999'>" + author->GetDisplayNameEscapedBold() + " changed the name to <b>" + Glib::Markup::escape_text(data->Content) + "</b></span></i>");
         } break;
         case MessageType::CHANNEL_ICON_CHANGE: {
             const auto author = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
-            b->insert_markup(s, "<i><span color='#999999'>" + author->GetEscapedBoldName() + " changed the channel icon</span></i>");
+            b->insert_markup(s, "<i><span color='#999999'>" + author->GetDisplayNameEscapedBold() + " changed the channel icon</span></i>");
         } break;
         case MessageType::USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_1:
         case MessageType::USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_2:
         case MessageType::USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_3: {
             const auto author = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
             const auto guild = Abaddon::Get().GetDiscordClient().GetGuild(*data->GuildID);
-            b->insert_markup(s, "<i><span color='#999999'>" + author->GetEscapedBoldName() + " just boosted the server <b>" + Glib::Markup::escape_text(data->Content) + "</b> times! " +
+            b->insert_markup(s, "<i><span color='#999999'>" + author->GetDisplayNameEscapedBold() + " just boosted the server <b>" + Glib::Markup::escape_text(data->Content) + "</b> times! " +
                                     Glib::Markup::escape_text(guild->Name) + " has achieved <b>Level " + std::to_string(static_cast<int>(data->Type) - 8) + "!</b></span></i>"); // oo cheeky me !!!
         } break;
         case MessageType::CHANNEL_FOLLOW_ADD: {
             const auto author = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
-            b->insert_markup(s, "<i><span color='#999999'>" + author->GetEscapedBoldName() + " has added <b>" + Glib::Markup::escape_text(data->Content) + "</b> to this channel. Its most important updates will show up here.</span></i>");
+            b->insert_markup(s, "<i><span color='#999999'>" + author->GetDisplayNameEscapedBold() + " has added <b>" + Glib::Markup::escape_text(data->Content) + "</b> to this channel. Its most important updates will show up here.</span></i>");
         } break;
         case MessageType::CALL: {
             b->insert_markup(s, "<span color='#999999'><i>[started a call]</i></span>");
@@ -275,13 +270,13 @@ void ChatMessageItemContainer::UpdateTextComponent(Gtk::TextView *tv) {
         case MessageType::THREAD_CREATED: {
             const auto author = Abaddon::Get().GetDiscordClient().GetUser(data->Author.ID);
             if (data->MessageReference.has_value() && data->MessageReference->ChannelID.has_value()) {
-                auto iter = b->insert_markup(s, "<i><span color='#999999'>" + author->GetEscapedBoldName() + " started a thread: </span></i>");
+                auto iter = b->insert_markup(s, "<i><span color='#999999'>" + author->GetDisplayNameEscapedBold() + " started a thread: </span></i>");
                 auto tag = b->create_tag();
                 tag->property_weight() = Pango::WEIGHT_BOLD;
                 m_channel_tagmap[tag] = *data->MessageReference->ChannelID;
                 b->insert_with_tag(iter, data->Content, tag);
             } else {
-                b->insert_markup(s, "<i><span color='#999999'>" + author->GetEscapedBoldName() + " started a thread: </span><b>" + Glib::Markup::escape_text(data->Content) + "</b></i>");
+                b->insert_markup(s, "<i><span color='#999999'>" + author->GetDisplayNameEscapedBold() + " started a thread: </span><b>" + Glib::Markup::escape_text(data->Content) + "</b></i>");
             }
         } break;
         default: break;
@@ -661,7 +656,7 @@ Gtk::Widget *ChatMessageItemContainer::CreateReplyComponent(const Message &data)
                 if (role.has_value()) {
                     const auto author = discord.GetUser(author_id);
                     if (author.has_value()) {
-                        return "<b><span color=\"#" + IntToCSSColor(role->Color) + "\">" + author->GetEscapedString() + "</span></b>";
+                        return "<b><span color=\"#" + IntToCSSColor(role->Color) + "\">" + author->GetDisplayNameEscaped(guild_id) + "</span></b>";
                     }
                 }
             }
@@ -669,7 +664,7 @@ Gtk::Widget *ChatMessageItemContainer::CreateReplyComponent(const Message &data)
 
         const auto author = discord.GetUser(author_id);
         if (author.has_value()) {
-            return author->GetEscapedBoldString<false>();
+            return author->GetDisplayNameEscapedBold(guild_id);
         }
 
         return "<b>Unknown User</b>";
@@ -679,8 +674,9 @@ Gtk::Widget *ChatMessageItemContainer::CreateReplyComponent(const Message &data)
     std::optional<std::shared_ptr<Message>> referenced_message = data.ReferencedMessage;
     if (data.MessageReference.has_value() && data.MessageReference->MessageID.has_value() && !referenced_message.has_value()) {
         auto refd = discord.GetMessage(*data.MessageReference->MessageID);
-        if (refd.has_value())
+        if (refd.has_value()) {
             referenced_message = std::make_shared<Message>(std::move(*refd));
+        }
     }
 
     if (data.Interaction.has_value()) {
@@ -690,7 +686,7 @@ Gtk::Widget *ChatMessageItemContainer::CreateReplyComponent(const Message &data)
                             Glib::Markup::escape_text(data.Interaction->Name) +
                             "</span>");
         } else if (const auto user = discord.GetUser(data.Interaction->User.ID); user.has_value()) {
-            lbl->set_markup(user->GetEscapedBoldString<false>());
+            lbl->set_markup(user->GetDisplayNameEscapedBold());
         } else {
             lbl->set_markup("<b>Unknown User</b>");
         }
@@ -711,8 +707,8 @@ Gtk::Widget *ChatMessageItemContainer::CreateReplyComponent(const Message &data)
                 Gtk::TextBuffer::iterator start, end;
                 buf->get_bounds(start, end);
                 buf->set_text(referenced.Content);
-                CleanupEmojis(buf);
-                HandleUserMentions(buf);
+                ChatUtil::CleanupEmojis(buf);
+                ChatUtil::HandleUserMentions(buf, ChannelID, false);
                 HandleChannelMentions(buf);
                 text = Glib::Markup::escape_text(buf->get_text());
             }
@@ -734,13 +730,6 @@ Gtk::Widget *ChatMessageItemContainer::CreateReplyComponent(const Message &data)
     return box;
 }
 
-Glib::ustring ChatMessageItemContainer::GetText(const Glib::RefPtr<Gtk::TextBuffer> &buf) {
-    Gtk::TextBuffer::iterator a, b;
-    buf->get_bounds(a, b);
-    auto slice = buf->get_slice(a, b, true);
-    return slice;
-}
-
 bool ChatMessageItemContainer::IsEmbedImageOnly(const EmbedData &data) {
     if (!data.Thumbnail.has_value()) return false;
     if (data.Author.has_value()) return false;
@@ -752,199 +741,10 @@ bool ChatMessageItemContainer::IsEmbedImageOnly(const EmbedData &data) {
     return data.Thumbnail->ProxyURL.has_value() && data.Thumbnail->URL.has_value() && data.Thumbnail->Width.has_value() && data.Thumbnail->Height.has_value();
 }
 
-void ChatMessageItemContainer::HandleRoleMentions(const Glib::RefPtr<Gtk::TextBuffer> &buf) {
-    constexpr static const auto mentions_regex = R"(<@&(\d+)>)";
-
-    static auto rgx = Glib::Regex::create(mentions_regex);
-
-    Glib::ustring text = GetText(buf);
-    const auto &discord = Abaddon::Get().GetDiscordClient();
-
-    int startpos = 0;
-    Glib::MatchInfo match;
-    while (rgx->match(text, startpos, match)) {
-        int mstart, mend;
-        if (!match.fetch_pos(0, mstart, mend)) break;
-        const Glib::ustring role_id = match.fetch(1);
-        const auto role = discord.GetRole(role_id);
-        if (!role.has_value()) {
-            startpos = mend;
-            continue;
-        }
-
-        Glib::ustring replacement;
-        if (role->HasColor()) {
-            replacement = "<b><span color=\"#" + IntToCSSColor(role->Color) + "\">@" + role->GetEscapedName() + "</span></b>";
-        } else {
-            replacement = "<b>@" + role->GetEscapedName() + "</b>";
-        }
-
-        const auto chars_start = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mstart);
-        const auto chars_end = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mend);
-        const auto start_it = buf->get_iter_at_offset(chars_start);
-        const auto end_it = buf->get_iter_at_offset(chars_end);
-
-        auto it = buf->erase(start_it, end_it);
-        buf->insert_markup(it, replacement);
-
-        text = GetText(buf);
-        startpos = 0;
-    }
-}
-
-void ChatMessageItemContainer::HandleUserMentions(const Glib::RefPtr<Gtk::TextBuffer> &buf) const {
-    constexpr static const auto mentions_regex = R"(<@!?(\d+)>)";
-
-    static auto rgx = Glib::Regex::create(mentions_regex);
-
-    Glib::ustring text = GetText(buf);
-    const auto &discord = Abaddon::Get().GetDiscordClient();
-
-    int startpos = 0;
-    Glib::MatchInfo match;
-    while (rgx->match(text, startpos, match)) {
-        int mstart, mend;
-        if (!match.fetch_pos(0, mstart, mend)) break;
-        const Glib::ustring user_id = match.fetch(1);
-        const auto user = discord.GetUser(user_id);
-        const auto channel = discord.GetChannel(ChannelID);
-        if (!user.has_value() || !channel.has_value()) {
-            startpos = mend;
-            continue;
-        }
-
-        Glib::ustring replacement;
-
-        if (channel->Type == ChannelType::DM || channel->Type == ChannelType::GROUP_DM)
-            replacement = user->GetEscapedBoldString<true>();
-        else {
-            const auto role_id = user->GetHoistedRole(*channel->GuildID, true);
-            const auto role = discord.GetRole(role_id);
-            if (!role.has_value())
-                replacement = user->GetEscapedBoldString<true>();
-            else
-                replacement = "<span color=\"#" + IntToCSSColor(role->Color) + "\">" + user->GetEscapedBoldString<true>() + "</span>";
-        }
-
-        // regex returns byte positions and theres no straightforward way in the c++ bindings to deal with that :(
-        const auto chars_start = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mstart);
-        const auto chars_end = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mend);
-        const auto start_it = buf->get_iter_at_offset(chars_start);
-        const auto end_it = buf->get_iter_at_offset(chars_end);
-
-        auto it = buf->erase(start_it, end_it);
-        buf->insert_markup(it, replacement);
-
-        text = GetText(buf);
-        startpos = 0;
-    }
-}
-
-void ChatMessageItemContainer::HandleStockEmojis(Gtk::TextView &tv) {
-    Abaddon::Get().GetEmojis().ReplaceEmojis(tv.get_buffer(), EmojiSize);
-}
-
-void ChatMessageItemContainer::HandleCustomEmojis(Gtk::TextView &tv) {
-    static auto rgx = Glib::Regex::create(R"(<a?:([\w\d_]+):(\d+)>)");
-
-    auto &img = Abaddon::Get().GetImageManager();
-
-    auto buf = tv.get_buffer();
-    auto text = GetText(buf);
-
-    Glib::MatchInfo match;
-    int startpos = 0;
-    while (rgx->match(text, startpos, match)) {
-        int mstart, mend;
-        if (!match.fetch_pos(0, mstart, mend)) break;
-        const bool is_animated = match.fetch(0)[1] == 'a';
-
-        const auto chars_start = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mstart);
-        const auto chars_end = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mend);
-        auto start_it = buf->get_iter_at_offset(chars_start);
-        auto end_it = buf->get_iter_at_offset(chars_end);
-
-        startpos = mend;
-        if (is_animated && Abaddon::Get().GetSettings().ShowAnimations) {
-            const auto mark_start = buf->create_mark(start_it, false);
-            end_it.backward_char();
-            const auto mark_end = buf->create_mark(end_it, false);
-            const auto cb = [&tv, buf, mark_start, mark_end](const Glib::RefPtr<Gdk::PixbufAnimation> &pixbuf) {
-                auto start_it = mark_start->get_iter();
-                auto end_it = mark_end->get_iter();
-                end_it.forward_char();
-                buf->delete_mark(mark_start);
-                buf->delete_mark(mark_end);
-                auto it = buf->erase(start_it, end_it);
-                const auto anchor = buf->create_child_anchor(it);
-                auto img = Gtk::manage(new Gtk::Image(pixbuf));
-                img->show();
-                tv.add_child_at_anchor(*img, anchor);
-            };
-            img.LoadAnimationFromURL(EmojiData::URLFromID(match.fetch(2), "gif"), EmojiSize, EmojiSize, sigc::track_obj(cb, tv));
-        } else {
-            // can't erase before pixbuf is ready or else marks that are in the same pos get mixed up
-            const auto mark_start = buf->create_mark(start_it, false);
-            end_it.backward_char();
-            const auto mark_end = buf->create_mark(end_it, false);
-            const auto cb = [buf, mark_start, mark_end](const Glib::RefPtr<Gdk::Pixbuf> &pixbuf) {
-                auto start_it = mark_start->get_iter();
-                auto end_it = mark_end->get_iter();
-                end_it.forward_char();
-                buf->delete_mark(mark_start);
-                buf->delete_mark(mark_end);
-                auto it = buf->erase(start_it, end_it);
-                int width, height;
-                GetImageDimensions(pixbuf->get_width(), pixbuf->get_height(), width, height, EmojiSize, EmojiSize);
-                buf->insert_pixbuf(it, pixbuf->scale_simple(width, height, Gdk::INTERP_BILINEAR));
-            };
-            img.LoadFromURL(EmojiData::URLFromID(match.fetch(2)), sigc::track_obj(cb, tv));
-        }
-
-        text = GetText(buf);
-    }
-}
-
-void ChatMessageItemContainer::HandleEmojis(Gtk::TextView &tv) {
-    if (Abaddon::Get().GetSettings().ShowStockEmojis) HandleStockEmojis(tv);
-    if (Abaddon::Get().GetSettings().ShowCustomEmojis) HandleCustomEmojis(tv);
-}
-
-void ChatMessageItemContainer::CleanupEmojis(const Glib::RefPtr<Gtk::TextBuffer> &buf) {
-    static auto rgx = Glib::Regex::create(R"(<a?:([\w\d_]+):(\d+)>)");
-
-    auto text = GetText(buf);
-
-    Glib::MatchInfo match;
-    int startpos = 0;
-    while (rgx->match(text, startpos, match)) {
-        int mstart, mend;
-        if (!match.fetch_pos(0, mstart, mend)) break;
-
-        const auto new_term = ":" + match.fetch(1) + ":";
-
-        const auto chars_start = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mstart);
-        const auto chars_end = g_utf8_pointer_to_offset(text.c_str(), text.c_str() + mend);
-        auto start_it = buf->get_iter_at_offset(chars_start);
-        auto end_it = buf->get_iter_at_offset(chars_end);
-
-        startpos = mend;
-        const auto it = buf->erase(start_it, end_it);
-        const int alen = static_cast<int>(text.size());
-        text = GetText(buf);
-        const int blen = static_cast<int>(text.size());
-        startpos -= (alen - blen);
-
-        buf->insert(it, new_term);
-
-        text = GetText(buf);
-    }
-}
-
 void ChatMessageItemContainer::HandleChannelMentions(const Glib::RefPtr<Gtk::TextBuffer> &buf) {
     static auto rgx = Glib::Regex::create(R"(<#(\d+)>)");
 
-    Glib::ustring text = GetText(buf);
+    Glib::ustring text = ChatUtil::GetText(buf);
 
     const auto &discord = Abaddon::Get().GetDiscordClient();
 
@@ -975,7 +775,7 @@ void ChatMessageItemContainer::HandleChannelMentions(const Glib::RefPtr<Gtk::Tex
         it = buf->insert_with_tag(it, "#" + *chan->Name, tag);
 
         // rescan the whole thing so i dont have to deal with fixing match positions
-        text = GetText(buf);
+        text = ChatUtil::GetText(buf);
         startpos = 0;
     }
 }
@@ -1036,7 +836,7 @@ void ChatMessageItemContainer::HandleLinks(Gtk::TextView &tv) {
     const auto rgx = Glib::Regex::create(R"(\bhttps?:\/\/[^\s]+\.[^\s]+\b)");
 
     auto buf = tv.get_buffer();
-    Glib::ustring text = GetText(buf);
+    Glib::ustring text = ChatUtil::GetText(buf);
 
     int startpos = 0;
     Glib::MatchInfo match;
@@ -1212,6 +1012,7 @@ ChatMessageHeader::ChatMessageHeader(const Message &data)
     add(m_main_box);
 
     set_margin_bottom(8);
+    set_focus_on_click(false);
 
     show_all();
 
@@ -1243,7 +1044,7 @@ void ChatMessageHeader::UpdateName() {
         else
             m_author.set_markup("<span weight='bold'>" + name + "</span>");
     } else
-        m_author.set_markup("<span weight='bold'>" + user->GetEscapedName() + "</span>");
+        m_author.set_markup("<span weight='bold'>" + user->GetDisplayNameEscaped() + "</span>");
 }
 
 std::vector<Gtk::Widget *> ChatMessageHeader::GetChildContent() {
@@ -1269,7 +1070,7 @@ Glib::ustring ChatMessageHeader::GetEscapedDisplayName(const UserData &user, con
     if (member.has_value() && !member->Nickname.empty())
         return Glib::Markup::escape_text(member->Nickname);
     else
-        return Glib::Markup::escape_text(user.GetEscapedName());
+        return Glib::Markup::escape_text(user.GetDisplayNameEscaped());
 }
 
 bool ChatMessageHeader::on_author_button_press(GdkEventButton *ev) {

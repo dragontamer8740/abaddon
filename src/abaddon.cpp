@@ -1,10 +1,13 @@
 #include <memory>
+#include <spdlog/spdlog.h>
+#include <spdlog/cfg/env.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <string>
 #include <algorithm>
 #include "platform.hpp"
+#include "audio/manager.hpp"
 #include "discord/discord.hpp"
 #include "dialogs/token.hpp"
-#include "dialogs/editmessage.hpp"
 #include "dialogs/confirm.hpp"
 #include "dialogs/setstatus.hpp"
 #include "dialogs/friendpicker.hpp"
@@ -14,7 +17,10 @@
 #include "windows/profilewindow.hpp"
 #include "windows/pinnedwindow.hpp"
 #include "windows/threadswindow.hpp"
+#include "windows/voicewindow.hpp"
 #include "startup.hpp"
+#include "notifications/notifications.hpp"
+#include "remoteauth/remoteauthdialog.hpp"
 
 #ifdef WITH_LIBHANDY
     #include <handy.h>
@@ -34,7 +40,8 @@ Abaddon::Abaddon()
     std::string ua = GetSettings().UserAgent;
     m_discord.SetUserAgent(ua);
 
-    m_discord.signal_gateway_ready().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnReady));
+    // todo rename funcs
+    m_discord.signal_gateway_ready_supplemental().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnReady));
     m_discord.signal_message_create().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnMessageCreate));
     m_discord.signal_message_delete().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnMessageDelete));
     m_discord.signal_message_update().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnMessageUpdate));
@@ -46,6 +53,16 @@ Abaddon::Abaddon()
     m_discord.signal_thread_update().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnThreadUpdate));
     m_discord.signal_message_sent().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnMessageSent));
     m_discord.signal_disconnected().connect(sigc::mem_fun(*this, &Abaddon::DiscordOnDisconnect));
+
+#ifdef WITH_VOICE
+    m_discord.signal_voice_connected().connect(sigc::mem_fun(*this, &Abaddon::OnVoiceConnected));
+    m_discord.signal_voice_disconnected().connect(sigc::mem_fun(*this, &Abaddon::OnVoiceDisconnected));
+    m_discord.signal_voice_speaking().connect([this](const VoiceSpeakingData &m) {
+        spdlog::get("voice")->debug("{} SSRC: {}", m.UserID, m.SSRC);
+        m_audio.AddSSRC(m.SSRC);
+    });
+#endif
+
     m_discord.signal_channel_accessibility_changed().connect([this](Snowflake id, bool accessible) {
         if (!accessible)
             m_channels_requested.erase(id);
@@ -226,6 +243,21 @@ int Abaddon::StartGTK() {
         return 1;
     }
 
+#ifdef WITH_VOICE
+    if (!m_audio.OK()) {
+        Gtk::MessageDialog dlg(*m_main_window, "The audio engine could not be initialized!", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        dlg.set_position(Gtk::WIN_POS_CENTER);
+        dlg.run();
+        return 1;
+    }
+#endif
+
+#ifdef _WIN32
+    if (m_settings.GetSettings().HideConsole) {
+        ShowWindow(GetConsoleWindow(), SW_HIDE);
+    }
+#endif
+
     // store must be checked before this can be called
     m_main_window->UpdateComponents();
 
@@ -235,6 +267,7 @@ int Abaddon::StartGTK() {
     m_main_window->signal_action_connect().connect(sigc::mem_fun(*this, &Abaddon::ActionConnect));
     m_main_window->signal_action_disconnect().connect(sigc::mem_fun(*this, &Abaddon::ActionDisconnect));
     m_main_window->signal_action_set_token().connect(sigc::mem_fun(*this, &Abaddon::ActionSetToken));
+    m_main_window->signal_action_login_qr().connect(sigc::mem_fun(*this, &Abaddon::ActionLoginQR));
     m_main_window->signal_action_reload_css().connect(sigc::mem_fun(*this, &Abaddon::ActionReloadCSS));
     m_main_window->signal_action_set_status().connect(sigc::mem_fun(*this, &Abaddon::ActionSetStatus));
     m_main_window->signal_action_add_recipient().connect(sigc::mem_fun(*this, &Abaddon::ActionAddRecipient));
@@ -245,6 +278,11 @@ int Abaddon::StartGTK() {
     m_main_window->GetChannelList()->signal_action_guild_leave().connect(sigc::mem_fun(*this, &Abaddon::ActionLeaveGuild));
     m_main_window->GetChannelList()->signal_action_guild_settings().connect(sigc::mem_fun(*this, &Abaddon::ActionGuildSettings));
 
+#ifdef WITH_VOICE
+    m_main_window->GetChannelList()->signal_action_join_voice_channel().connect(sigc::mem_fun(*this, &Abaddon::ActionJoinVoiceChannel));
+    m_main_window->GetChannelList()->signal_action_disconnect_voice().connect(sigc::mem_fun(*this, &Abaddon::ActionDisconnectVoice));
+#endif
+
     m_main_window->GetChatWindow()->signal_action_message_edit().connect(sigc::mem_fun(*this, &Abaddon::ActionChatEditMessage));
     m_main_window->GetChatWindow()->signal_action_chat_submit().connect(sigc::mem_fun(*this, &Abaddon::ActionChatInputSubmit));
     m_main_window->GetChatWindow()->signal_action_chat_load_history().connect(sigc::mem_fun(*this, &Abaddon::ActionChatLoadHistory));
@@ -254,6 +292,8 @@ int Abaddon::StartGTK() {
     m_main_window->GetChatWindow()->signal_action_reaction_remove().connect(sigc::mem_fun(*this, &Abaddon::ActionReactionRemove));
 
     ActionReloadCSS();
+    AttachCSSMonitor();
+
     if (m_settings.GetSettings().HideToTray) {
         m_tray = Gtk::StatusIcon::create("discord");
         m_tray->signal_activate().connect(sigc::mem_fun(*this, &Abaddon::on_tray_click));
@@ -272,6 +312,14 @@ int Abaddon::StartGTK() {
     m_gtk_app->signal_shutdown().connect(sigc::mem_fun(*this, &Abaddon::OnShutdown), false);
 
     m_main_window->UpdateMenus();
+
+    auto action_go_to_channel = Gio::SimpleAction::create("go-to-channel", Glib::VariantType("s"));
+    action_go_to_channel->signal_activate().connect([this](const Glib::VariantBase &param) {
+        const auto id_str = Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(param);
+        const Snowflake id = id_str.get();
+        ActionChannelOpened(id, false);
+    });
+    m_gtk_app->add_action(action_go_to_channel);
 
     m_gtk_app->hold();
     m_main_window->show();
@@ -300,8 +348,8 @@ void Abaddon::StartDiscord() {
 }
 
 void Abaddon::StopDiscord() {
-    if (m_discord.Stop())
-        SaveState();
+    if (m_discord.IsStarted()) SaveState();
+    m_discord.Stop();
     m_main_window->UpdateMenus();
 }
 
@@ -330,6 +378,7 @@ void Abaddon::DiscordOnReady() {
 
 void Abaddon::DiscordOnMessageCreate(const Message &message) {
     m_main_window->UpdateChatNewMessage(message);
+    m_notifications.CheckMessage(message);
 }
 
 void Abaddon::DiscordOnMessageDelete(Snowflake id, Snowflake channel_id) {
@@ -396,6 +445,67 @@ void Abaddon::DiscordOnThreadUpdate(const ThreadUpdateData &data) {
             m_main_window->GetChatWindow()->SetTopic("");
     }
 }
+
+#ifdef WITH_VOICE
+void Abaddon::OnVoiceConnected() {
+    m_audio.StartCaptureDevice();
+    ShowVoiceWindow();
+}
+
+void Abaddon::OnVoiceDisconnected() {
+    m_audio.StopCaptureDevice();
+    m_audio.RemoveAllSSRCs();
+    if (m_voice_window != nullptr) {
+        m_voice_window->close();
+    }
+}
+
+void Abaddon::ShowVoiceWindow() {
+    if (m_voice_window != nullptr) return;
+
+    auto *wnd = new VoiceWindow(m_discord.GetVoiceChannelID());
+    m_voice_window = wnd;
+
+    wnd->signal_mute().connect([this](bool is_mute) {
+        m_discord.SetVoiceMuted(is_mute);
+        m_audio.SetCapture(!is_mute);
+    });
+
+    wnd->signal_deafen().connect([this](bool is_deaf) {
+        m_discord.SetVoiceDeafened(is_deaf);
+        m_audio.SetPlayback(!is_deaf);
+    });
+
+    wnd->signal_gate().connect([this](double gate) {
+        m_audio.SetCaptureGate(gate);
+    });
+
+    wnd->signal_gain().connect([this](double gain) {
+        m_audio.SetCaptureGain(gain);
+    });
+
+    wnd->signal_mute_user_cs().connect([this](Snowflake id, bool is_mute) {
+        if (const auto ssrc = m_discord.GetSSRCOfUser(id); ssrc.has_value()) {
+            m_audio.SetMuteSSRC(*ssrc, is_mute);
+        }
+    });
+
+    wnd->signal_user_volume_changed().connect([this](Snowflake id, double volume) {
+        auto &vc = m_discord.GetVoiceClient();
+        vc.SetUserVolume(id, volume);
+    });
+
+    wnd->set_position(Gtk::WIN_POS_CENTER);
+
+    wnd->show();
+    wnd->signal_hide().connect([this, wnd]() {
+        m_voice_window = nullptr;
+        delete wnd;
+        delete m_user_menu;
+        SetupUserMenu();
+    });
+}
+#endif
 
 SettingsManager::Settings &Abaddon::GetSettings() {
     return m_settings.GetSettings();
@@ -618,6 +728,15 @@ void Abaddon::LoadState() {
     }
 }
 
+void Abaddon::AttachCSSMonitor() {
+    const auto path = GetCSSPath("/" + GetSettings().MainCSS);
+    const auto file = Gio::File::create_for_path(path);
+    m_main_css_monitor = file->monitor_file();
+    m_main_css_monitor->signal_changed().connect([this](const auto &file, const auto &other_file, Gio::FileMonitorEvent event) {
+        ActionReloadCSS();
+    });
+}
+
 void Abaddon::ManageHeapWindow(Gtk::Window *window) {
     window->signal_hide().connect([this, window]() {
         delete window;
@@ -683,6 +802,18 @@ std::string Abaddon::GetStateCachePath(const std::string &path) {
     return GetStateCachePath() + path;
 }
 
+Glib::RefPtr<Gtk::Application> Abaddon::GetApp() {
+    return m_gtk_app;
+}
+
+bool Abaddon::IsMainWindowActive() {
+    return m_main_window->has_toplevel_focus();
+}
+
+Snowflake Abaddon::GetActiveChannelID() const noexcept {
+    return m_main_window->GetChatActiveChannel();
+}
+
 void Abaddon::ActionConnect() {
     if (!m_discord.IsStarted())
         StartDiscord();
@@ -705,12 +836,29 @@ void Abaddon::ActionSetToken() {
     m_main_window->UpdateMenus();
 }
 
+void Abaddon::ActionLoginQR() {
+#ifdef WITH_QRLOGIN
+    RemoteAuthDialog dlg(*m_main_window);
+    auto response = dlg.run();
+    if (response == Gtk::RESPONSE_OK) {
+        m_discord_token = dlg.GetToken();
+        m_discord.UpdateToken(m_discord_token);
+        m_main_window->UpdateComponents();
+        GetSettings().DiscordToken = m_discord_token;
+        ActionConnect();
+    }
+    m_main_window->UpdateMenus();
+#endif
+}
+
 void Abaddon::ActionChannelOpened(Snowflake id, bool expand_to) {
     if (!id.IsValid()) {
         m_discord.SetReferringChannel(Snowflake::Invalid);
         return;
     }
     if (id == m_main_window->GetChatActiveChannel()) return;
+
+    m_notifications.WithdrawChannel(id);
 
     m_main_window->GetChatWindow()->SetTopic("");
 
@@ -789,24 +937,26 @@ void Abaddon::ActionChatLoadHistory(Snowflake id) {
 }
 
 void Abaddon::ActionChatInputSubmit(ChatSubmitParams data) {
-    if (data.Message.substr(0, 7) == "/shrug " || data.Message == "/shrug")
+    if (data.Message.substr(0, 7) == "/shrug " || data.Message == "/shrug") {
         data.Message = data.Message.substr(6) + "\xC2\xAF\x5C\x5F\x28\xE3\x83\x84\x29\x5F\x2F\xC2\xAF"; // this is important
+    }
+
+    if (data.Message.substr(0, 8) == "@silent " || (data.Message.substr(0, 7) == "@silent" && !data.Attachments.empty())) {
+        data.Silent = true;
+        data.Message = data.Message.substr(7);
+    }
 
     if (!m_discord.HasChannelPermission(m_discord.GetUserData().ID, data.ChannelID, Permission::VIEW_CHANNEL)) return;
 
-    m_discord.SendChatMessage(data, NOOP_CALLBACK);
+    if (data.EditingID.IsValid()) {
+        m_discord.EditMessage(data.ChannelID, data.EditingID, data.Message);
+    } else {
+        m_discord.SendChatMessage(data, NOOP_CALLBACK);
+    }
 }
 
 void Abaddon::ActionChatEditMessage(Snowflake channel_id, Snowflake id) {
-    const auto msg = m_discord.GetMessage(id);
-    if (!msg.has_value()) return;
-    EditMessageDialog dlg(*m_main_window);
-    dlg.SetContent(msg->Content);
-    auto response = dlg.run();
-    if (response == Gtk::RESPONSE_OK) {
-        auto new_content = dlg.GetContent();
-        m_discord.EditMessage(channel_id, id, new_content);
-    }
+    m_main_window->EditMessage(id);
 }
 
 void Abaddon::ActionInsertMention(Snowflake id) {
@@ -827,7 +977,7 @@ void Abaddon::ActionKickMember(Snowflake user_id, Snowflake guild_id) {
     ConfirmDialog dlg(*m_main_window);
     const auto user = m_discord.GetUser(user_id);
     if (user.has_value())
-        dlg.SetConfirmText("Are you sure you want to kick " + user->Username + "#" + user->Discriminator + "?");
+        dlg.SetConfirmText("Are you sure you want to kick " + user->GetUsername() + "?");
     auto response = dlg.run();
     if (response == Gtk::RESPONSE_OK)
         m_discord.KickUser(user_id, guild_id);
@@ -837,7 +987,7 @@ void Abaddon::ActionBanMember(Snowflake user_id, Snowflake guild_id) {
     ConfirmDialog dlg(*m_main_window);
     const auto user = m_discord.GetUser(user_id);
     if (user.has_value())
-        dlg.SetConfirmText("Are you sure you want to ban " + user->Username + "#" + user->Discriminator + "?");
+        dlg.SetConfirmText("Are you sure you want to ban " + user->GetUsername() + "?");
     auto response = dlg.run();
     if (response == Gtk::RESPONSE_OK)
         m_discord.BanUser(user_id, guild_id);
@@ -903,6 +1053,16 @@ void Abaddon::ActionViewThreads(Snowflake channel_id) {
     window->show();
 }
 
+#ifdef WITH_VOICE
+void Abaddon::ActionJoinVoiceChannel(Snowflake channel_id) {
+    m_discord.ConnectToVoice(channel_id);
+}
+
+void Abaddon::ActionDisconnectVoice() {
+    m_discord.DisconnectFromVoice();
+}
+#endif
+
 std::optional<Glib::ustring> Abaddon::ShowTextPrompt(const Glib::ustring &prompt, const Glib::ustring &title, const Glib::ustring &placeholder, Gtk::Window *window) {
     TextInputDialog dlg(prompt, title, placeholder, window != nullptr ? *window : *m_main_window);
     const auto code = dlg.run();
@@ -942,15 +1102,24 @@ EmojiResource &Abaddon::GetEmojis() {
     return m_emojis;
 }
 
+#ifdef WITH_VOICE
+AudioManager &Abaddon::GetAudio() {
+    return m_audio;
+}
+#endif
+
 void Abaddon::on_tray_click() {
     m_main_window->set_visible(!m_main_window->is_visible());
 }
+
 void Abaddon::on_tray_menu_click() {
     m_gtk_app->quit();
 }
+
 void Abaddon::on_tray_popup_menu(int button, int activate_time) {
     m_tray->popup_menu_at_position(*m_tray_menu, button, activate_time);
 }
+
 void Abaddon::on_window_hide() {
     if (!m_settings.GetSettings().HideToTray) {
         m_gtk_app->quit();
@@ -981,6 +1150,14 @@ int main(int argc, char **argv) {
     if (buf[0] != '1')
         SetEnvironmentVariableA("GTK_CSD", "0");
 #endif
+
+    spdlog::cfg::load_env_levels();
+    auto log_ui = spdlog::stdout_color_mt("ui");
+    auto log_audio = spdlog::stdout_color_mt("audio");
+    auto log_voice = spdlog::stdout_color_mt("voice");
+    auto log_discord = spdlog::stdout_color_mt("discord");
+    auto log_ra = spdlog::stdout_color_mt("remote-auth");
+
     Gtk::Main::init_gtkmm_internals(); // why???
     return Abaddon::Get().StartGTK();
 }

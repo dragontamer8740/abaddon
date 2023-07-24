@@ -3,13 +3,20 @@
 #include <mutex>
 #include <string>
 #include <unordered_set>
+#include <gtkmm/application.h>
+#include <gtkmm/cssprovider.h>
+#include <gtkmm/statusicon.h>
 #include "discord/discord.hpp"
 #include "windows/mainwindow.hpp"
 #include "settings.hpp"
 #include "imgmanager.hpp"
 #include "emojis.hpp"
+#include "notifications/notifications.hpp"
+#include "audio/manager.hpp"
 
 #define APP_TITLE "Abaddon"
+
+class AudioManager;
 
 class Abaddon {
 private:
@@ -34,6 +41,7 @@ public:
     void ActionConnect();
     void ActionDisconnect();
     void ActionSetToken();
+    void ActionLoginQR();
     void ActionJoinGuildDialog();
     void ActionChannelOpened(Snowflake id, bool expand_to = true);
     void ActionChatInputSubmit(ChatSubmitParams data);
@@ -51,6 +59,11 @@ public:
     void ActionViewPins(Snowflake channel_id);
     void ActionViewThreads(Snowflake channel_id);
 
+#ifdef WITH_VOICE
+    void ActionJoinVoiceChannel(Snowflake channel_id);
+    void ActionDisconnectVoice();
+#endif
+
     std::optional<Glib::ustring> ShowTextPrompt(const Glib::ustring &prompt, const Glib::ustring &title, const Glib::ustring &placeholder = "", Gtk::Window *window = nullptr);
     bool ShowConfirm(const Glib::ustring &prompt, Gtk::Window *window = nullptr);
 
@@ -58,6 +71,10 @@ public:
 
     ImageManager &GetImageManager();
     EmojiResource &GetEmojis();
+
+#ifdef WITH_VOICE
+    AudioManager &GetAudio();
+#endif
 
     std::string GetDiscordToken() const;
     bool IsDiscordActive() const;
@@ -77,6 +94,13 @@ public:
     void DiscordOnDisconnect(bool is_reconnecting, GatewayCloseCode close_code);
     void DiscordOnThreadUpdate(const ThreadUpdateData &data);
 
+#ifdef WITH_VOICE
+    void OnVoiceConnected();
+    void OnVoiceDisconnected();
+
+    void ShowVoiceWindow();
+#endif
+
     SettingsManager::Settings &GetSettings();
 
     Glib::RefPtr<Gtk::CssProvider> GetStyleProvider();
@@ -92,6 +116,10 @@ public:
     static std::string GetResPath(const std::string &path);
     static std::string GetStateCachePath(const std::string &path);
 
+    [[nodiscard]] Glib::RefPtr<Gtk::Application> GetApp();
+    [[nodiscard]] bool IsMainWindowActive();
+    [[nodiscard]] Snowflake GetActiveChannelID() const noexcept;
+
 protected:
     void RunFirstTimeDiscordStartup();
 
@@ -102,6 +130,9 @@ protected:
     void SetupUserMenu();
     void SaveState();
     void LoadState();
+
+    void AttachCSSMonitor();
+    Glib::RefPtr<Gio::FileMonitor> m_main_css_monitor;
 
     Snowflake m_shown_user_menu_id;
     Snowflake m_shown_user_menu_guild_id;
@@ -143,10 +174,17 @@ private:
     ImageManager m_img_mgr;
     EmojiResource m_emojis;
 
+#ifdef WITH_VOICE
+    AudioManager m_audio;
+    Gtk::Window *m_voice_window = nullptr;
+#endif
+
     mutable std::mutex m_mutex;
     Glib::RefPtr<Gtk::Application> m_gtk_app;
     Glib::RefPtr<Gtk::CssProvider> m_css_provider;
     Glib::RefPtr<Gtk::CssProvider> m_css_low_provider; // registered with a lower priority to allow better customization
     Glib::RefPtr<Gtk::StatusIcon> m_tray;
     std::unique_ptr<MainWindow> m_main_window; // wah wah cant create a gtkstylecontext fuck you
+
+    Notifications m_notifications;
 };

@@ -9,11 +9,13 @@ Alternative Discord client made in C++ with GTK
 Current features:
 
 * Not Electron
+* Voice support
 * Handles most types of chat messages including embeds, images, and replies
 * Completely styleable/customizable with CSS (if you have a system GTK theme it won't really use it though)
 * Identifies to Discord as the web client unlike other clients so less likely to be falsely flagged as spam<sup>1</sup>
 * Set status
 * Unread and mention indicators
+* Notifications (non-Windows)
 * Start new DMs and group DMs
 * View user profiles (notes, mutual servers, mutual friends)
 * Kick, ban, and unban members
@@ -55,6 +57,9 @@ the result of fundamental issues with Discord's thread implementation.
     * mingw-w64-x86_64-zlib
     * mingw-w64-x86_64-gtkmm3
     * mingw-w64-x86_64-libhandy
+    * mingw-w64-x86_64-opus
+    * mingw-w64-x86_64-libsodium
+    * mingw-w64-x86_64-spdlog
 2. `git clone --recurse-submodules="subprojects" https://github.com/uowuo/abaddon && cd abaddon`
 3. `mkdir build && cd build`
 4. `cmake -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo ..`
@@ -63,7 +68,7 @@ the result of fundamental issues with Discord's thread implementation.
 #### Mac:
 
 1. `git clone https://github.com/uowuo/abaddon --recurse-submodules="subprojects" && cd abaddon`
-2. `brew install gtkmm3 nlohmann-json libhandy`
+2. `brew install gtkmm3 nlohmann-json libhandy opus libsodium spdlog`
 3. `mkdir build && cd build`
 4. `cmake ..`
 5. `make`
@@ -73,16 +78,18 @@ the result of fundamental issues with Discord's thread implementation.
 1. Install dependencies
     * On Ubuntu 20.04 (Focal) and newer:
       ```Shell
-      $ sudo apt install g++ cmake libgtkmm-3.0-dev libcurl4-gnutls-dev libsqlite3-dev libssl-dev nlohmann-json3-dev libhandy-1-dev libsecret-1-dev
+      $ sudo apt install g++ cmake libgtkmm-3.0-dev libcurl4-gnutls-dev libsqlite3-dev libssl-dev nlohmann-json3-dev libhandy-1-dev libsecret-1-dev libopus-dev libsodium-dev libspdlog-dev
       ```
     * On Arch Linux
       ```Shell
-      $ sudo pacman -S gcc cmake gtkmm3 libcurl-gnutls lib32-sqlite lib32-openssl nlohmann-json libhandy
+      $ sudo pacman -S gcc cmake gtkmm3 libcurl-gnutls lib32-sqlite lib32-openssl nlohmann-json libhandy opus libsodium spdlog
       ```
     * On Fedora Linux:
       ```Shell
-      $ sudo dnf install g++ cmake gtkmm3.0-devel libcurl-devel sqlite-devel openssl-devel json-devel libsecret-devel libhandy-devel
+      $ sudo dnf install g++ cmake gtkmm3.0-devel libcurl-devel sqlite-devel openssl-devel json-devel libsecret-devel libhandy-devel opus-devel libsodium-devel spdlog-devel
       ```
+      > **Note:** On older versions of fedora you might need to install gtkmm30-devel instead of gtkmm3.0-devel.
+      Use `dnf search gtkmm3` to see available packages.
 2. `git clone https://github.com/uowuo/abaddon --recurse-submodules="subprojects" && cd abaddon`
 3. `mkdir build && cd build`
 4. `cmake ..`
@@ -134,18 +141,22 @@ spam filter's wrath:
 
 * [gtkmm](https://www.gtkmm.org/en/)
 * [JSON for Modern C++](https://github.com/nlohmann/json)
-* [IXWebSocket](https://github.com/machinezone/IXWebSocket)
+* [IXWebSocket](https://github.com/machinezone/IXWebSocket) (provided as submodule)
 * [libcurl](https://curl.se/)
 * [zlib](https://zlib.net/)
 * [SQLite3](https://www.sqlite.org/index.html)
+* [spdlog](https://github.com/gabime/spdlog)
 * [libhandy](https://gnome.pages.gitlab.gnome.org/libhandy/) (optional)
+* [keychain](https://github.com/hrantzsch/keychain) (optional, provided as submodule)
+* [miniaudio](https://miniaud.io/) (optional, provided as submodule, required for voice)
+* [libopus](https://opus-codec.org/) (optional, required for voice)
+* [libsodium](https://doc.libsodium.org/) (optional, required for voice)
 
 ### TODO:
 
-* Voice support
 * User activities
 * More server management stuff
-* A bunch of other stuff
+* A bunch of other stuff probably
 
 ### Styling
 
@@ -215,32 +226,33 @@ Used in guild settings popup:
 
 Used in profile popup:
 
-| Selector                     | Description                                             |
-|------------------------------|---------------------------------------------------------|
-| `.mutual-friend-item`        | Applied to every item in the mutual friends list        |
-| `.mutual-friend-item-name`   | Name in mutual friend item                              |
-| `.mutual-friend-item-avatar` | Avatar in mutual friend item                            |
-| `.mutual-guild-item`         | Applied to every item in the mutual guilds list         |
-| `.mutual-guild-item-name`    | Name in mutual guild item                               |
-| `.mutual-guild-item-icon`    | Icon in mutual guild item                               |
-| `.mutual-guild-item-nick`    | User nickname in mutual guild item                      |
-| `.profile-connection`        | Applied to every item in the user connections list      |
-| `.profile-connection-label`  | Label in profile connection item                        |
-| `.profile-connection-check`  | Checkmark in verified profile connection items          |
-| `.profile-connections`       | Container for profile connections                       |
-| `.profile-notes`             | Container for notes in profile window                   |
-| `.profile-notes-label`       | Label that says "NOTE"                                  |
-| `.profile-notes-text`        | Actual note text                                        |
-| `.profile-info-pane`         | Applied to container for info section of profile popup  |
-| `.profile-info-created`      | Label for creation date of profile                      |
-| `.user-profile-window`       |                                                         |
-| `.profile-main-container`    | Inner container for profile                             |
-| `.profile-avatar`            |                                                         |
-| `.profile-username`          |                                                         |
-| `.profile-switcher`          | Buttons used to switch viewed section of profile        |
-| `.profile-stack`             | Container for profile info that can be switched between |
-| `.profile-badges`            | Container for badges                                    |
-| `.profile-badge`             |                                                         |
+| Selector                       | Description                                                |
+|--------------------------------|------------------------------------------------------------|
+| `.mutual-friend-item`          | Applied to every item in the mutual friends list           |
+| `.mutual-friend-item-name`     | Name in mutual friend item                                 |
+| `.mutual-friend-item-avatar`   | Avatar in mutual friend item                               |
+| `.mutual-guild-item`           | Applied to every item in the mutual guilds list            |
+| `.mutual-guild-item-name`      | Name in mutual guild item                                  |
+| `.mutual-guild-item-icon`      | Icon in mutual guild item                                  |
+| `.mutual-guild-item-nick`      | User nickname in mutual guild item                         |
+| `.profile-connection`          | Applied to every item in the user connections list         |
+| `.profile-connection-label`    | Label in profile connection item                           |
+| `.profile-connection-check`    | Checkmark in verified profile connection items             |
+| `.profile-connections`         | Container for profile connections                          |
+| `.profile-notes`               | Container for notes in profile window                      |
+| `.profile-notes-label`         | Label that says "NOTE"                                     |
+| `.profile-notes-text`          | Actual note text                                           |
+| `.profile-info-pane`           | Applied to container for info section of profile popup     |
+| `.profile-info-created`        | Label for creation date of profile                         |
+| `.user-profile-window`         |                                                            |
+| `.profile-main-container`      | Inner container for profile                                |
+| `.profile-avatar`              |                                                            |
+| `.profile-username`            | User's display name (username for backwards compatibility) |
+| `.profile-username-nondisplay` | User's actual username                                     |
+| `.profile-switcher`            | Buttons used to switch viewed section of profile           |
+| `.profile-stack`               | Container for profile info that can be switched between    |
+| `.profile-badges`              | Container for badges                                       |
+| `.profile-badge`               |                                                            |
 
 ### Settings
 
@@ -300,6 +312,13 @@ For example, memory_db would be set by adding `memory_db = true` under the line 
 | `mentionbadgecolor`     | string | background color for mention badges                 |
 | `mentionbadgetextcolor` | string | color to use for number displayed on mention badges |
 | `unreadcolor`           | string | color to use for the unread indicator               |
+
+#### notifications
+
+| Setting     | Type    | Default                  | Description                                                                   |
+|-------------|---------|--------------------------|-------------------------------------------------------------------------------|
+| `enabled`   | boolean | true (if not on Windows) | Enable desktop notifications                                                  |
+| `playsound` | boolean | true                     | Enable notification sounds. Requires ENABLE_NOTIFICATION_SOUNDS=TRUE in CMake |
 
 ### Environment variables
 

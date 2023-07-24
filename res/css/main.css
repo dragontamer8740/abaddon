@@ -114,6 +114,10 @@
     border: 1px solid #026FB9;
 }
 
+.message-input.editing {
+    border: 1px solid #b9026f;
+}
+
 .message-input.bad-input {
     border: 1px solid #dd3300;
 }
@@ -235,6 +239,10 @@
 .profile-username {
     margin-left: 10px;
     font-size: 20px;
+}
+
+.profile-username-nondisplay {
+	margin-left: 10px;
 }
 
 .profile-badge {
@@ -359,4 +367,31 @@
     border: none;
     background-color: #dd3300;
     margin-left: 1px;
+}
+
+.voice-info {
+    background-color: #0B0B0B;
+    padding: 5px;
+    border: 1px solid #202020;
+}
+
+.voice-info-disconnect-image {
+    color: #DDDDDD;
+}
+
+.voice-info-status {
+    font-weight: bold;
+}
+
+.voice-info-location {
+
+}
+
+.voice-state-server {
+    color: red;
+}
+
+spinbutton {
+    color: @text_color;
+    margin-top: 10px;
 }

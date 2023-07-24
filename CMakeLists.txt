@@ -8,7 +8,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 option(USE_LIBHANDY "Enable features that require libhandy (default)" ON)
+option(ENABLE_VOICE "Enable voice suppport" ON)
 option(USE_KEYCHAIN "Store the token in the keychain (default)" ON)
+option(ENABLE_NOTIFICATION_SOUNDS "Enable notification sounds (default)" ON)
+option(ENABLE_QRCODE_LOGIN "Enable QR code login (default)" ON)
 
 find_package(nlohmann_json REQUIRED)
 find_package(CURL)
@@ -48,6 +51,9 @@ file(GLOB_RECURSE ABADDON_SOURCES
         "src/*.cpp"
         )
 
+list(FILTER ABADDON_SOURCES EXCLUDE REGEX ".*notifier_gio\\.cpp$")
+list(FILTER ABADDON_SOURCES EXCLUDE REGEX ".*notifier_null\\.cpp$")
+
 add_executable(abaddon ${ABADDON_SOURCES})
 target_include_directories(abaddon PUBLIC ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(abaddon PUBLIC ${PROJECT_BINARY_DIR})
@@ -56,12 +62,27 @@ target_include_directories(abaddon PUBLIC ${ZLIB_INCLUDE_DIRS})
 target_include_directories(abaddon PUBLIC ${SQLite3_INCLUDE_DIRS})
 target_include_directories(abaddon PUBLIC ${NLOHMANN_JSON_INCLUDE_DIRS})
 
+if (ENABLE_QRCODE_LOGIN)
+    add_library(qrcodegen subprojects/qrcodegen/cpp/qrcodegen.hpp subprojects/qrcodegen/cpp/qrcodegen.cpp)
+    target_include_directories(qrcodegen PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/qrcodegen/cpp")
+    target_link_libraries(abaddon qrcodegen)
+
+    target_include_directories(abaddon PUBLIC "subprojects/qrcodegen/cpp")
+    target_compile_definitions(abaddon PRIVATE WITH_QRLOGIN)
+endif ()
+
 target_precompile_headers(abaddon PRIVATE <gtkmm.h> src/abaddon.hpp src/util.hpp)
 
 if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") OR
 (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
 ((CMAKE_SYSTEM_NAME STREQUAL "Linux") OR (CMAKE_CXX_COMPILER_VERSION LESS 9))))
     target_link_libraries(abaddon stdc++fs)
+endif ()
+
+if (NOT WIN32)
+    target_sources(abaddon PRIVATE src/notifications/notifier_gio.cpp)
+else ()
+    target_sources(abaddon PRIVATE src/notifications/notifier_null.cpp)
 endif ()
 
 if (IXWebSocket_LIBRARIES)
@@ -92,11 +113,20 @@ if (Fontconfig_FOUND)
     target_link_libraries(abaddon Fontconfig::Fontconfig)
 endif ()
 
+find_package(spdlog REQUIRED)
+target_link_libraries(abaddon spdlog::spdlog)
+
 target_link_libraries(abaddon ${SQLite3_LIBRARIES})
 target_link_libraries(abaddon ${GTKMM_LIBRARIES})
 target_link_libraries(abaddon ${CURL_LIBRARIES})
 target_link_libraries(abaddon ${ZLIB_LIBRARY})
 target_link_libraries(abaddon ${NLOHMANN_JSON_LIBRARIES})
+target_link_libraries(abaddon ${CMAKE_DL_LIBS})
+
+include(CheckAtomic)
+if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB OR NOT HAVE_CXX_ATOMICS64_WITHOUT_LIB)
+    target_link_libraries(abaddon atomic)
+endif ()
 
 if (USE_LIBHANDY)
     find_package(libhandy REQUIRED)
@@ -113,4 +143,43 @@ if (USE_KEYCHAIN)
         target_link_libraries(abaddon keychain)
         target_compile_definitions(abaddon PRIVATE WITH_KEYCHAIN)
     endif ()
+endif ()
+
+set(USE_MINIAUDIO FALSE)
+
+if (ENABLE_VOICE)
+    target_compile_definitions(abaddon PRIVATE WITH_VOICE)
+
+    find_package(PkgConfig)
+
+    set(USE_MINIAUDIO TRUE)
+    pkg_check_modules(Opus REQUIRED IMPORTED_TARGET opus)
+    target_link_libraries(abaddon PkgConfig::Opus)
+
+    pkg_check_modules(libsodium REQUIRED IMPORTED_TARGET libsodium)
+    target_link_libraries(abaddon PkgConfig::libsodium)
+
+    target_link_libraries(abaddon ${CMAKE_DL_LIBS})
+
+    if (APPLE)
+        target_link_libraries(abaddon "-framework CoreFoundation")
+        target_link_libraries(abaddon "-framework CoreAudio")
+        target_link_libraries(abaddon "-framework AudioToolbox")
+    endif ()
+
+endif ()
+
+if (${ENABLE_NOTIFICATION_SOUNDS})
+    set(USE_MINIAUDIO TRUE)
+    target_compile_definitions(abaddon PRIVATE ENABLE_NOTIFICATION_SOUNDS)
+endif ()
+
+if (USE_MINIAUDIO)
+    find_path(MINIAUDIO_INCLUDE_DIR
+              NAMES miniaudio.h
+              HINTS subprojects
+              PATH_SUFFIXES miniaudio
+              REQUIRED)
+    target_include_directories(abaddon PUBLIC ${MINIAUDIO_INCLUDE_DIR})
+    target_compile_definitions(abaddon PRIVATE WITH_MINIAUDIO)
 endif ()
