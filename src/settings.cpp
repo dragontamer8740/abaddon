@@ -48,6 +48,7 @@ void SettingsManager::ReadSettings() {
     SMBOOL("discord", "memory_db", UseMemoryDB);
     SMBOOL("discord", "prefetch", Prefetch);
     SMBOOL("discord", "autoconnect", Autoconnect);
+    SMBOOL("gui", "auto_complete_emojis", AutoCompleteEmojis);
     SMSTR("gui", "css", MainCSS);
     SMBOOL("gui", "animated_guild_hover_only", AnimatedGuildHoverOnly);
     SMBOOL("gui", "animations", ShowAnimations);

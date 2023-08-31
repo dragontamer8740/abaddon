@@ -267,7 +267,8 @@ void Completer::OnTextBufferChanged() {
             CompleteMentions(term.substr(1));
             break;
         case ':':
-            CompleteEmojis(term.substr(1));
+            if(Abaddon::Get().GetSettings().AutoCompleteEmojis)
+                CompleteEmojis(term.substr(1));
             break;
         case '#':
             CompleteChannels(term.substr(1));
