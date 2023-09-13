@@ -312,7 +312,7 @@ int Abaddon::StartGTK() {
     m_tray_menu->append(*m_tray_exit);
     m_tray_menu->show_all();
 
-    /* wyatt: this breaks fvwm when minimizing but not using hide to tray (window iconifies invisibly and can't be restored) */
+    /* lance: this breaks fvwm when minimizing but not using hide to tray (window iconifies invisibly and can't be restored) */
     m_main_window->signal_hide().connect(sigc::mem_fun(*this, &Abaddon::on_window_hide));
     m_gtk_app->signal_shutdown().connect(sigc::mem_fun(*this, &Abaddon::OnShutdown), false);
 
