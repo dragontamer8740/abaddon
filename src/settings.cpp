@@ -69,7 +69,6 @@ void SettingsManager::ReadSettings() {
     SMINT("http", "concurrent", CacheHTTPConcurrency);
     SMSTR("http", "user_agent", UserAgent);
     SMSTR("style", "expandercolor", ChannelsExpanderColor);
-    SMSTR("style", "linkcolor", LinkColor);
     SMSTR("style", "nsfwchannelcolor", NSFWChannelColor);
     SMSTR("style", "channelcolor", ChannelColor);
     SMSTR("style", "mentionbadgecolor", MentionBadgeColor);
@@ -160,7 +159,6 @@ void SettingsManager::Close() {
         SMINT("http", "concurrent", CacheHTTPConcurrency);
         SMSTR("http", "user_agent", UserAgent);
         SMSTR("style", "expandercolor", ChannelsExpanderColor);
-        SMSTR("style", "linkcolor", LinkColor);
         SMSTR("style", "nsfwchannelcolor", NSFWChannelColor);
         SMSTR("style", "channelcolor", ChannelColor);
         SMSTR("style", "mentionbadgecolor", MentionBadgeColor);
