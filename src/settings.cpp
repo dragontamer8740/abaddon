@@ -168,7 +168,7 @@ void SettingsManager::DefineSettings() {
 #ifdef WITH_RNNOISE
     AddSetting("voice", "vad", "rnnoise"s, &Settings::VAD);
 #else
-    AddSetting("voice", "vad", "gate", &Settings::VAD);
+    AddSetting("voice", "vad", "gate"s, &Settings::VAD);
 #endif
 
     HandleReadToken();
