@@ -13,9 +13,9 @@ public:
         bool UseMemoryDB;
         bool Prefetch;
         bool Autoconnect;
+        bool UseKeychain;
 
         // [gui]
-<<<<<<< HEAD
         std::string MainCSS { "main.css" };
         bool AnimatedGuildHoverOnly { true };
         bool AutoCompleteEmojis { true };
@@ -34,7 +34,6 @@ public:
         bool HideToTray { false };
         bool ShowDeletedIndicator { true };
         double FontScale { -1.0 };
-=======
         std::string MainCSS;
         bool AnimatedGuildHoverOnly;
         bool ShowAnimations;
@@ -47,7 +46,6 @@ public:
         bool HideToTray;
         bool ShowDeletedIndicator;
         double FontScale;
->>>>>>> bc9bb3d (refactor settings)
 
         // [http]
         int CacheHTTPConcurrency;
