@@ -46,6 +46,8 @@ public:
         bool HideToTray;
         bool ShowDeletedIndicator;
         double FontScale;
+        int ImageEmbedClampWidth;
+        int ImageEmbedClampHeight;
 
         // [http]
         int CacheHTTPConcurrency;
