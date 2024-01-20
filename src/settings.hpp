@@ -16,30 +16,13 @@ public:
         bool UseKeychain;
 
         // [gui]
-        std::string MainCSS { "main.css" };
-        bool AnimatedGuildHoverOnly { true };
-        bool AutoCompleteEmojis { true };
-        bool ShowAnimations { true };
-        bool ShowCustomEmojis { true };
-        bool ShowMemberListDiscriminators { true };
-        bool ShowOwnerCrown { true };
-        bool SaveState { true };
-#ifdef _WIN32
-        bool ShowStockEmojis { false };
-#else
-        bool ShowStockEmojis { true };
-#endif
-        bool Unreads { true };
-        bool AltMenu { false };
-        bool HideToTray { false };
-        bool ShowDeletedIndicator { true };
-        double FontScale { -1.0 };
         std::string MainCSS;
         bool AnimatedGuildHoverOnly;
         bool ShowAnimations;
         bool ShowCustomEmojis;
         bool ShowOwnerCrown;
         bool SaveState;
+        bool AutoCompleteEmojis;
         bool ShowStockEmojis;
         bool Unreads;
         bool AltMenu;
