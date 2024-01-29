@@ -9,6 +9,7 @@
 #include <array>
 #include <glibmm/main.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#define MA_NO_PULSEAUDIO 1
 #include <miniaudio.h>
 #include <opus.h>
 #include <cstring>

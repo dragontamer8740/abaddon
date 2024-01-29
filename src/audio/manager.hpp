@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#define MA_NO_PULSEAUDIO 1
 #include <miniaudio.h>
 #include <opus.h>
 #include <sigc++/sigc++.h>
