@@ -29,8 +29,11 @@ public:
         bool HideToTray;
         bool ShowDeletedIndicator;
         double FontScale;
+        bool FolderIconOnly;
+        bool ClassicChangeGuildOnOpen;
         int ImageEmbedClampWidth;
         int ImageEmbedClampHeight;
+        bool ClassicChannels;
 
         // [http]
         int CacheHTTPConcurrency;
@@ -49,6 +52,7 @@ public:
 
         // [voice]
         std::string VAD;
+        std::string Backends;
 
         // [windows]
         bool HideConsole;

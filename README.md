@@ -87,7 +87,7 @@ the result of fundamental issues with Discord's thread implementation.
 #### Linux:
 
 1. Install dependencies
-    * On Ubuntu 22.04 (Jammy) and newer:
+    * On Ubuntu 22.04 (Jammy)/Debian 12 (bookworm) and newer:
       ```Shell
       $ sudo apt install g++ cmake libgtkmm-3.0-dev libcurl4-gnutls-dev libsqlite3-dev libssl-dev nlohmann-json3-dev libhandy-1-dev libsecret-1-dev libopus-dev libsodium-dev libspdlog-dev
       ```
@@ -173,6 +173,9 @@ spam filter's wrath:
 
 ### Styling
 
+<details>
+    <summary>Show all styles</summary>
+
 #### CSS selectors
 
 | Selector                       | Description                                                                                       |
@@ -257,6 +260,8 @@ Used in profile popup:
 | `.profile-badges`              | Container for badges                                       |
 | `.profile-badge`               |                                                            |
 
+</details>
+
 ### Settings
 
 Settings are configured (for now) by editing `abaddon.ini`.
@@ -269,6 +274,9 @@ The format is similar to the standard Windows ini format **except**:
 
 This listing is organized by section.
 For example, memory_db would be set by adding `memory_db = true` under the line `[discord]`
+
+<details>
+    <summary>Show all settings</summary>
 
 #### discord
 
@@ -291,23 +299,25 @@ For example, memory_db would be set by adding `memory_db = true` under the line 
 
 #### gui
 
-| Setting                     | Type    | Default | Description                                                                                                                |
-|-----------------------------|---------|---------|----------------------------------------------------------------------------------------------------------------------------|
-| `member_list_discriminator` | boolean | true    | show user discriminators in the member list                                                                                |
-| `stock_emojis`              | boolean | true    | allow abaddon to substitute unicode emojis with images from emojis.bin, must be false to allow GTK to render emojis itself |
-| `custom_emojis`             | boolean | true    | download and use custom Discord emojis                                                                                     |
-| `css`                       | string  |         | path to the main CSS file                                                                                                  |
-| `animations`                | boolean | true    | use animated images where available (e.g. server icons, emojis, avatars). false means static images will be used           |
-| `animated_guild_hover_only` | boolean | true    | only animate guild icons when the guild is being hovered over                                                              |
-| `owner_crown`               | boolean | true    | show a crown next to the owner                                                                                             |
-| `unreads`                   | boolean | true    | show unread indicators and mention badges                                                                                  |
-| `save_state`                | boolean | true    | save the state of the gui (active channels, tabs, expanded channels)                                                       |
-| `alt_menu`                  | boolean | false   | keep the menu hidden unless revealed with alt key                                                                          |
-| `hide_to_tray`              | boolean | false   | hide abaddon to the system tray on window close                                                                            |
-| `show_deleted_indicator`    | boolean | true    | show \[deleted\] indicator next to deleted messages instead of actually deleting the message                               |
-| `font_scale`                | double  |         | scale font rendering. 1 is unchanged                                                                                       |
-| `image_embed_clamp_width`   | int     | 400     | maximum width of image embeds                                                                                              |
-| `image_embed_clamp_height`  | int     | 300     | maximum height of image embeds                                                                                             |
+| Setting                        | Type    | Default | Description                                                                                                                |
+|--------------------------------|---------|---------|----------------------------------------------------------------------------------------------------------------------------|
+| `member_list_discriminator`    | boolean | true    | show user discriminators in the member list                                                                                |
+| `stock_emojis`                 | boolean | true    | allow abaddon to substitute unicode emojis with images from emojis.bin, must be false to allow GTK to render emojis itself |
+| `custom_emojis`                | boolean | true    | download and use custom Discord emojis                                                                                     |
+| `css`                          | string  |         | path to the main CSS file                                                                                                  |
+| `animations`                   | boolean | true    | use animated images where available (e.g. server icons, emojis, avatars). false means static images will be used           |
+| `animated_guild_hover_only`    | boolean | true    | only animate guild icons when the guild is being hovered over                                                              |
+| `owner_crown`                  | boolean | true    | show a crown next to the owner                                                                                             |
+| `unreads`                      | boolean | true    | show unread indicators and mention badges                                                                                  |
+| `save_state`                   | boolean | true    | save the state of the gui (active channels, tabs, expanded channels)                                                       |
+| `alt_menu`                     | boolean | false   | keep the menu hidden unless revealed with alt key                                                                          |
+| `hide_to_tray`                 | boolean | false   | hide abaddon to the system tray on window close                                                                            |
+| `show_deleted_indicator`       | boolean | true    | show \[deleted\] indicator next to deleted messages instead of actually deleting the message                               |
+| `font_scale`                   | double  |         | scale font rendering. 1 is unchanged                                                                                       |
+| `image_embed_clamp_width`      | int     | 400     | maximum width of image embeds                                                                                              |
+| `image_embed_clamp_height`     | int     | 300     | maximum height of image embeds                                                                                             |
+| `classic_channels`             | boolean | false   | use classic Discord-style interface for server/channel listing                                                             |
+| `classic_change_guild_on_open` | boolean | true    | change displayed guild when selecting a channel (classic channel list)                                                     |
 
 #### style
 
@@ -328,15 +338,16 @@ For example, memory_db would be set by adding `memory_db = true` under the line 
 
 #### voice
 
-| Setting | Type   | Default                            | Description                                                |
-|---------|--------|------------------------------------|------------------------------------------------------------|
-| `vad`   | string | rnnoise if enabled, gate otherwise | Method used for voice activity detection. Changeable in UI |
+| Setting    | Type   | Default                            | Description                                                                                                                |
+|------------|--------|------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| `vad`      | string | rnnoise if enabled, gate otherwise | Method used for voice activity detection. Changeable in UI                                                                 |
+| `backends` | string | empty                              | Change backend priority when initializing miniaudio: `wasapi;dsound;winmm;coreaudio;sndio;audio4;oss;pulseaudio;alsa;jack` |
 
 #### windows
 
 | Setting       | Type    | Default | Description             |
 |---------------|---------|---------|-------------------------|
-| `hideconsole` | boolean | true    | Hide console on startup |
+| `hideconsole` | boolean | false   | Hide console on startup |
 
 ### Environment variables
 
@@ -344,3 +355,5 @@ For example, memory_db would be set by adding `memory_db = true` under the line 
 |------------------|------------------------------------------------------------------------------|
 | `ABADDON_NO_FC`  | (Windows only) don't use custom font config                                  |
 | `ABADDON_CONFIG` | change path of configuration file to use. relative to cwd or can be absolute |
+
+</details>

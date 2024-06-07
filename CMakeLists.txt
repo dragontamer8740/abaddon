@@ -38,19 +38,13 @@ if (WIN32)
     add_compile_definitions(NOMINMAX)
 endif ()
 
-include(TestBigEndian)
-test_big_endian(IS_BIG_ENDIAN)
-if (IS_BIG_ENDIAN)
-    add_compile_definitions(ABADDON_IS_BIG_ENDIAN)
-endif ()
-
 configure_file(${PROJECT_SOURCE_DIR}/src/config.h.in ${PROJECT_BINARY_DIR}/config.h)
 
 file(GLOB_RECURSE ABADDON_SOURCES
         "src/*.h"
         "src/*.hpp"
         "src/*.cpp"
-        )
+)
 
 list(FILTER ABADDON_SOURCES EXCLUDE REGEX ".*notifier_gio\\.cpp$")
 list(FILTER ABADDON_SOURCES EXCLUDE REGEX ".*notifier_fallback\\.cpp$")
@@ -72,7 +66,9 @@ if (ENABLE_QRCODE_LOGIN)
     target_compile_definitions(abaddon PRIVATE WITH_QRLOGIN)
 endif ()
 
-target_precompile_headers(abaddon PRIVATE <gtkmm.h> src/abaddon.hpp src/util.hpp)
+if (NOT (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
+    target_precompile_headers(abaddon PRIVATE <gtkmm.h> src/abaddon.hpp src/util.hpp)
+endif ()
 
 if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") OR
 (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
@@ -119,10 +115,11 @@ target_link_libraries(abaddon spdlog::spdlog)
 
 target_link_libraries(abaddon ${SQLite3_LIBRARIES})
 target_link_libraries(abaddon ${GTKMM_LIBRARIES})
-target_link_libraries(abaddon ${CURL_LIBRARIES})
 target_link_libraries(abaddon ${ZLIB_LIBRARY})
 target_link_libraries(abaddon ${NLOHMANN_JSON_LIBRARIES})
 target_link_libraries(abaddon ${CMAKE_DL_LIBS})
+
+target_link_libraries(abaddon CURL::libcurl)
 
 include(CheckAtomic)
 if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB OR NOT HAVE_CXX_ATOMICS64_WITHOUT_LIB)
@@ -147,6 +144,13 @@ if (USE_KEYCHAIN)
 endif ()
 
 set(USE_MINIAUDIO FALSE)
+
+if (APPLE)
+    target_link_libraries(abaddon "-framework CoreFoundation")
+    target_link_libraries(abaddon "-framework CoreAudio")
+    target_link_libraries(abaddon "-framework AudioToolbox")
+    target_link_libraries(abaddon "-framework AudioUnit")
+endif ()
 
 if (ENABLE_VOICE)
     target_compile_definitions(abaddon PRIVATE WITH_VOICE)
@@ -194,12 +198,6 @@ if (ENABLE_VOICE)
             target_link_libraries(abaddon rnnoise::rnnoise)
         endif ()
     endif ()
-
-    if (APPLE)
-        target_link_libraries(abaddon "-framework CoreFoundation")
-        target_link_libraries(abaddon "-framework CoreAudio")
-        target_link_libraries(abaddon "-framework AudioToolbox")
-    endif ()
 endif ()
 
 if (${ENABLE_NOTIFICATION_SOUNDS})
@@ -214,12 +212,11 @@ if (USE_MINIAUDIO)
             PATH_SUFFIXES miniaudio
             REQUIRED)
 
-    if (APPLE)
-        target_link_libraries(abaddon "-framework CoreFoundation")
-        target_link_libraries(abaddon "-framework CoreAudio")
-        target_link_libraries(abaddon "-framework AudioToolbox")
-    endif ()
-
     target_include_directories(abaddon PUBLIC ${MINIAUDIO_INCLUDE_DIR})
     target_compile_definitions(abaddon PRIVATE WITH_MINIAUDIO)
 endif ()
+
+set(ABADDON_COMPILER_DEFS "" CACHE STRING "Additional compiler definitions")
+foreach (COMPILER_DEF IN LISTS ABADDON_COMPILER_DEFS)
+    target_compile_definitions(abaddon PRIVATE "${COMPILER_DEF}")
+endforeach ()
