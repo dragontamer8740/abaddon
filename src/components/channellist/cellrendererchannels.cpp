@@ -54,49 +54,6 @@ void RenderExpander(int x_offset, const Cairo::RefPtr<Cairo::Context> &cr, Gtk::
     cr->stroke();
 }
 
-void AddUnreadIndicator(const Cairo::RefPtr<Cairo::Context> &cr, Gtk::Widget &widget, const Gdk::Rectangle &background_area) {
-    static const auto color_setting = Gdk::RGBA(Abaddon::Get().GetSettings().UnreadIndicatorColor);
-
-    const auto color = color_setting.get_alpha_u() > 0 ? color_setting : widget.get_style_context()->get_background_color(Gtk::STATE_FLAG_SELECTED);
-
-    cr->set_source_rgb(color.get_red(), color.get_green(), color.get_blue());
-    const auto x = background_area.get_x();
-    const auto y = background_area.get_y();
-    const auto w = background_area.get_width();
-    const auto h = background_area.get_height();
-    cr->rectangle(x, y, 3, h);
-    cr->fill();
-}
-
-void RenderExpander(int x_offset, const Cairo::RefPtr<Cairo::Context> &cr, Gtk::Widget &widget, const Gdk::Rectangle &background_area, bool is_expanded) {
-    constexpr static int len = 5;
-    int x1, y1, x2, y2, x3, y3;
-    if (is_expanded) {
-        x1 = background_area.get_x() + x_offset;
-        y1 = background_area.get_y() + background_area.get_height() / 2 - len;
-        x2 = background_area.get_x() + x_offset + len;
-        y2 = background_area.get_y() + background_area.get_height() / 2 + len;
-        x3 = background_area.get_x() + x_offset + len * 2;
-        y3 = background_area.get_y() + background_area.get_height() / 2 - len;
-    } else {
-        x1 = background_area.get_x() + x_offset;
-        y1 = background_area.get_y() + background_area.get_height() / 2 - len;
-        x2 = background_area.get_x() + x_offset + len * 2;
-        y2 = background_area.get_y() + background_area.get_height() / 2;
-        x3 = background_area.get_x() + x_offset;
-        y3 = background_area.get_y() + background_area.get_height() / 2 + len;
-    }
-    cr->move_to(x1, y1);
-    cr->line_to(x2, y2);
-    cr->line_to(x3, y3);
-    auto expander_color = Gdk::RGBA(Abaddon::Get().GetSettings().ChannelsExpanderColor);
-    if (expander_color.get_alpha_u() == 0) {
-        expander_color = widget.get_style_context()->get_background_color(Gtk::STATE_FLAG_SELECTED);
-    }
-    cr->set_source_rgb(expander_color.get_red(), expander_color.get_green(), expander_color.get_blue());
-    cr->stroke();
-}
-
 CellRendererChannels::CellRendererChannels()
     : Glib::ObjectBase(typeid(CellRendererChannels))
     , Gtk::CellRenderer()
